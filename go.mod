@@ -17,7 +17,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20200929181438-91d71ef2122c // indirect
 	github.com/openshift/hypershift v1.0.0
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/sirupsen/logrus v1.6.0
+	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/spf13/cobra v1.1.1
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
