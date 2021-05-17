@@ -1,0 +1,73 @@
+<body>
+<style>
+
+</style>
+
+<script src="https://unpkg.com/mithril/mithril.js"></script>
+<script>
+  var root = document.body
+
+  function ClusterTreeComponent(initialVnode) {
+    var current = null
+    var lastUpdated = new Date()
+
+    function load() {
+      return m.request({
+        method: "GET",
+        url: "/api/clusters",
+      })
+      .then(function(result) {
+        current = result
+        lastUpdated = new Date()
+        console.log("loaded new cluster state")
+      })
+    }
+
+    function renderTree(cluster) {
+      if (!cluster) return
+      return m("ul", {class: "cluster-tree"},
+        m("li", [
+          `Cluster: ${cluster.resource.metadata.name} (${cluster.lastObserved})`,
+          m("ul", [
+            m("li", [
+              m("a", {href: cluster.consoleURL}, "Console"),
+              m("input", {
+                type: "password",
+                value: cluster.kubeadminPassword,
+                onclick: (e) => e.target.setAttribute("type", "text"),
+                onblur: (e) => e.target.setAttribute("type", "password"),
+              }),
+            ]),
+            m("li", [
+              m("a", {
+                href: `data:text/plain;charset=utf-8,${encodeURIComponent(cluster.kubeConfig)}`,
+                download: `${cluster.resource.metadata.name}.kubeconfig`,
+              }, "Download kubeconfig"),
+            ]),
+            m("li", [
+              "Errors",
+              m("ul", cluster.errors.map(message => m("li", message))),
+            ])
+          ]),
+          cluster.children.map(child => renderTree(child)),
+        ])
+      )
+    }
+
+    return {
+      oninit: load,
+      view: function(vnode) {
+        return m("div", [
+          m("p", `Last updated: ${lastUpdated.toISOString()}`),
+          renderTree(current),
+          m("button", {
+            onclick: load
+          }, "Refresh"),
+        ])
+      }
+    }
+  }
+
+  m.mount(root, ClusterTreeComponent)
+</script>
+</body>
