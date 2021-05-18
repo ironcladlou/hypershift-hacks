@@ -259,10 +259,13 @@ func collectNodes(ctx context.Context, providerClient client.Client, cluster *hy
 	if kubeConfigData, hasKubeConfigData, err := getKubeConfig(ctx, providerClient, cluster); err != nil {
 		node.RecordError(fmt.Errorf("failed to get kubeconfig: %w", err))
 	} else {
-		if hasKubeConfigData {
+		if hasKubeConfigData && len(kubeConfigData) > 0 {
 			node.KubeConfig = string(kubeConfigData)
 		} else {
+			// If we have no kubeconfig, we can't make a client to do any further
+			// processing, so return early
 			node.RecordError(fmt.Errorf("no kubeconfig data found"))
+			return node, nil
 		}
 	}
 
