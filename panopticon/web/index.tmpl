@@ -1,0 +1,56 @@
+{{define "cluster"}}
+<ul class="outline">
+  <li>Name: {{.Resource.Name}}</li>
+  <li>Last updated: {{.LastUpdated.Format "2006-01-02T15:04:05Z07:00"}})</li>
+  <li>Kubeconfig: <a href="data:text/plain;charset=utf-8,{{.KubeConfig}}" download="{{.Resource.Name}}.kubeconfig">Download</a></li>
+  <li>Console: <a href="{{.ConsoleURL}}">{{.ConsoleURL}}</a></li>
+  <li>Kubeadmin password: <input type="password" value="{{.KubeadminPassword}}"/></li>
+
+  {{if .Errors}}
+  <li>Errors:
+    <ul>
+      {{range .Errors}}
+      <li>{{.}}</li>
+      {{end}}
+    </ul>
+  </li>
+  {{end}}
+
+  {{if .Children}}
+  <li>
+    Children:
+    {{range .Children}}
+      {{template "cluster" .}}
+    {{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
+<html>
+<style>
+  body {
+    font-family: Arial, serif;
+  }
+
+  .outline {
+    border: 1px solid lightgray;
+    margin: 5px;
+  }
+</style>
+<body>
+
+{{template "cluster" .}}
+
+<script>
+  document.querySelectorAll('input').forEach((input) => {
+    input.addEventListener('click', (e) => {
+      e.currentTarget.setAttribute("type", "text")
+    })
+    input.addEventListener('blur', (e) => {
+      e.currentTarget.setAttribute("type", "password")
+    })
+  })
+</script>
+</body>
+</html>

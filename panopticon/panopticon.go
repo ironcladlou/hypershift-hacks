@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -104,20 +106,31 @@ func (s *AnalyzerServer) Run(ctx context.Context, opts *ServeOptions) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/clusters", s.handleGetClusters)
 
-	var webFS http.FileSystem
+	var webFS fs.FS
 	if opts.Development {
 		if pwd, err := os.Getwd(); err != nil {
 			return err
 		} else {
 			dir := filepath.Join(pwd, "/panopticon/web")
 			log.Printf("Serving web contents from %s\n", dir)
-			webFS = http.Dir(dir)
+			webFS = os.DirFS(dir)
 		}
 	} else {
 		log.Println("Serving web contents from embedded binary")
-		webFS = http.FS(web.Assets)
+		webFS = web.Assets
 	}
-	mux.Handle("/web/", http.StripPrefix("/web", http.FileServer(webFS)))
+
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		tmpl, err := template.ParseFS(webFS, "index.tmpl")
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if err := tmpl.Execute(w, s.analyzer.model.Root); err != nil {
+			log.Println(err)
+		}
+	}))
 
 	server := http.Server{Addr: opts.Addr, Handler: mux}
 	go func() {
@@ -361,60 +374,4 @@ func getConsoleURL(ctx context.Context, c client.Client) (string, error) {
 		return "", fmt.Errorf("console route is not reporting an ingress")
 	}
 	return fmt.Sprintf("https://" + consoleRoute.Status.Ingress[0].Host), nil
-}
-
-type RenderOptions struct {
-	Namespace string
-	Name      string
-}
-
-func newRenderCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:          "render",
-		Short:        "Renders a tree of hosted clusters",
-		SilenceUsage: true,
-	}
-	opts := &RenderOptions{
-		Namespace: "ci",
-		Name:      "provider",
-	}
-	cmd.Flags().StringVar(&opts.Namespace, "namespace", opts.Namespace, "The root cluster namespace")
-	cmd.Flags().StringVar(&opts.Name, "name", opts.Name, "The root cluster name")
-	cmd.Run = func(cmd *cobra.Command, args []string) {
-		ctx, cancel := context.WithCancel(context.Background())
-		sigs := make(chan os.Signal, 1)
-		signal.Notify(sigs, syscall.SIGINT)
-		go func() {
-			<-sigs
-			cancel()
-		}()
-		if err := render(ctx, opts.Namespace, opts.Name); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-	}
-	return cmd
-}
-
-func render(ctx context.Context, namespace, name string) error {
-	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: hyperapi.Scheme})
-	if err != nil {
-		return err
-	}
-
-	var rootCluster hyperv1.HostedCluster
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &rootCluster); err != nil {
-		return err
-	}
-	tree, err := collectNodes(ctx, c, &rootCluster, nil)
-	if err != nil {
-		return fmt.Errorf("failed to make tree: %w", err)
-	}
-
-	output, err := json.Marshal(tree)
-	if err != nil {
-		return fmt.Errorf("failed to marshal tree: %w", err)
-	}
-	fmt.Println(string(output))
-	return nil
 }
